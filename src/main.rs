@@ -5,7 +5,7 @@ use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -17,7 +17,7 @@ use figment::{
     Figment,
 };
 use flexi_logger::{LogSpecification, Logger};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use ndarray::{s, Array2};
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{self, DebouncedEvent};
@@ -207,7 +207,7 @@ impl Identity {
         let infostr = format!("Copied {:?} to {:?}", path, outname);
 
         fs::copy(path, outname).context(errstr)?;
-        info!("{}", infostr);
+        debug!("{}", infostr);
 
         Ok(())
     }
@@ -218,6 +218,7 @@ impl Process for Identity {
         for p in paths {
             self.filecp(p)?;
         }
+        info!("Identity processor successful.");
         Ok(())
     }
 }
@@ -324,7 +325,11 @@ impl Process for FKSpecies {
             .with_file_name("20140000-img-0000.sis");
 
         debug!("Writing OD image to its path");
-        SisImg::new(imgod)?.write(imgodop)?;
+        SisImg::new(imgod)?.write(imgodop.clone())?;
+        info!(
+            "FKSpecies processor succesful. Output written to {:?}",
+            imgodop
+        );
 
         Ok(())
     }
@@ -344,7 +349,22 @@ fn handle_events(
     }
     paths.dedup();
     debug!("Event paths: {:?}", paths);
-    proc.proc(paths)
+    let start = Instant::now();
+    let stat = proc.proc(paths);
+    let end = Instant::now();
+    match stat {
+        Ok(()) => {
+            let elapsed = end - start;
+            info!(
+                "Events handled. Total elapsed time {} s.",
+                elapsed.as_secs()
+            );
+        }
+        Err(e) => {
+            error!("Error while processing events: {:?}.\nRetrying.", e);
+        }
+    };
+    Ok(())
 }
 
 /// Get properly overridden logging level.
@@ -416,14 +436,16 @@ fn main() -> Result<()> {
     checkpaths(&conf)?;
 
     let processor = getproc(&conf)?;
-    warn!("Chosen processor: {}", &conf.proc);
+    if !conf.quiet {
+        println!("Chosen processor: {}", conf.proc);
+    }
 
     let inpath = Path::new(&conf.inpath);
 
     let (tx, rx) = mpsc::channel();
 
     let mut debouncer = notify_debouncer_full::new_debouncer(
-        Duration::from_millis(200),
+        Duration::from_millis(1500),
         None,
         tx,
     )?;
@@ -433,7 +455,7 @@ fn main() -> Result<()> {
     watcher.watch(inpath, RecursiveMode::Recursive)?;
 
     if !conf.quiet {
-        println!("{} {}", "Watching path: ".blue(), conf.inpath.blue());
+        println!("{} {}", "Watching path: ", conf.inpath);
     }
 
     for res in rx {
