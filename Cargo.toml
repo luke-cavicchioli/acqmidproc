@@ -6,7 +6,6 @@ authors = ["Luca Cavicchioli"]
 description = "Preprocess images from acquire.py and feed them to cam.py"
 
 [dependencies]
-gtk = { version = "0.8.0", package = "gtk4", features = ["v4_8"] }
 notify = "6.1"
 notify-debouncer-full = "0.3"
 anyhow = "1.0"
