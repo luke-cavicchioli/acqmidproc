@@ -285,6 +285,7 @@ impl FKSpecies {
 
 impl Process for FKSpecies {
     fn proc(&self, paths: Vec<PathBuf>) -> Result<()> {
+        // TODO: optimize with pre-allocated image processing buffers
         let img1p = FKSpecies::findpattern(paths.clone(), "rawimg-0001")?;
         let img1fn = img1p
             .file_name()
@@ -453,6 +454,7 @@ fn main() -> Result<()> {
     let watcher = debouncer.watcher();
 
     watcher.watch(inpath, RecursiveMode::Recursive)?;
+    // TODO: implement ctrl-c handling with unwatch
 
     if !conf.quiet {
         println!("{} {}", "Watching path: ", conf.inpath);
